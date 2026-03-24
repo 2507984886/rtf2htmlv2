@@ -30,6 +30,9 @@
 #include <stack>
 #include <algorithm>
 
+/* 前向声明 */
+static FILE* open_file(const std::string& utf8_path, const char* mode);
+
 /* ============================================================
  * 工具：十六进制解析
  * ============================================================ */
@@ -497,6 +500,12 @@ private:
         if (in_cell) {
             html += para_buf;
             if (cell_break) html += "<br>";
+        } else if (in_table) {
+            /* 表格内、单元格外的段落（行与行之间）：丢弃，避免生成无效HTML */
+            para_buf.clear();
+            last_cf = CharFmt{};
+            span_open = false;
+            return;
         } else {
             std::string style;
             switch (gs.pf.align) {
@@ -785,10 +794,12 @@ private:
                 }
                 case RTF_RBRACE: {
                     flush_ansi();
-                    /* 保存字体名 */
+                    /* 保存字体名（用字体自身的字符集转 UTF-8） */
                     if (gs.dest == DEST_FONTTBL && !cur_font_name.empty() && !fonts.empty()) {
-                        if (fonts.back().name.empty())
-                            fonts.back().name = cur_font_name;
+                        if (fonts.back().name.empty()) {
+                            int cp = charset_to_cp(fonts.back().charset);
+                            fonts.back().name = ansi_to_utf8(cur_font_name, cp);
+                        }
                         cur_font_name.clear();
                     }
                     /* 图片 */
@@ -858,8 +869,10 @@ private:
                     if (gs.dest == DEST_FONTTBL) {
                         if (c != ';') cur_font_name += c;
                         else {
-                            if (!fonts.empty() && fonts.back().name.empty())
-                                fonts.back().name = cur_font_name;
+                            if (!fonts.empty() && fonts.back().name.empty()) {
+                                int cp = charset_to_cp(fonts.back().charset);
+                                fonts.back().name = ansi_to_utf8(cur_font_name, cp);
+                            }
                             cur_font_name.clear();
                         }
                         break;
@@ -892,7 +905,7 @@ public:
 private:
     bool write_output(const std::string& path)
     {
-        FILE* fp = fopen(path.c_str(), "wb");
+        FILE* fp = open_file(path, "wb");
         if (!fp) {
             fprintf(stderr, "错误: 无法写入: %s\n", path.c_str());
             return false;
@@ -922,11 +935,29 @@ private:
 };
 
 /* ============================================================
+ * 跨平台 fopen（Windows 用 _wfopen 支持中文路径）
+ * ============================================================ */
+static FILE* open_file(const std::string& utf8_path, const char* mode)
+{
+#ifdef _WIN32
+    int wn = MultiByteToWideChar(CP_UTF8, 0, utf8_path.c_str(), -1, nullptr, 0);
+    if (wn > 0) {
+        std::vector<wchar_t> wpath(wn);
+        MultiByteToWideChar(CP_UTF8, 0, utf8_path.c_str(), -1, wpath.data(), wn);
+        wchar_t wmode[8] = {};
+        for (int i = 0; mode[i] && i < 7; i++) wmode[i] = (wchar_t)mode[i];
+        return _wfopen(wpath.data(), wmode);
+    }
+#endif
+    return fopen(utf8_path.c_str(), mode);
+}
+
+/* ============================================================
  * 读取文件
  * ============================================================ */
 static bool read_file(const std::string& path, std::vector<unsigned char>& out)
 {
-    FILE* fp = fopen(path.c_str(), "rb");
+    FILE* fp = open_file(path, "rb");
     if (!fp) { fprintf(stderr, "错误: 无法打开: %s\n", path.c_str()); return false; }
     fseek(fp, 0, SEEK_END);
     long sz = ftell(fp);
