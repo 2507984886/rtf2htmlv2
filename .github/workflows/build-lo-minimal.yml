@@ -1,0 +1,114 @@
+name: 构建最小化 LOKit
+
+on:
+  workflow_dispatch:          # 手动触发
+    inputs:
+      apply_patch:
+        description: '应用 mergelibs 裁剪补丁（减少约 20 MB）'
+        type: boolean
+        default: false
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 240      # 最长 4 小时
+
+    steps:
+      # ---- 1. 检出本仓库（含 autogen.input 和构建脚本）----
+      - name: 检出 rtf2html 仓库
+        uses: actions/checkout@v4
+
+      # ---- 2. 检出 LibreOffice 源码（浅克隆节省时间）----
+      - name: 检出 LibreOffice 源码
+        run: |
+          git clone --depth=1 \
+            https://git.libreoffice.org/core \
+            $HOME/lo-src
+          # 初始化必要的子模块
+          cd $HOME/lo-src
+          git submodule update --init --depth=1 \
+            dictionaries translations
+
+      # ---- 3. 安装构建依赖 ----
+      - name: 安装构建依赖
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            build-essential autoconf automake libtool pkg-config \
+            bison flex gperf nasm yasm \
+            python3 python3-dev \
+            libx11-dev libxext-dev libxrender-dev \
+            libfontconfig1-dev libfreetype6-dev \
+            libpng-dev libjpeg-dev libxml2-dev libxslt1-dev \
+            libssl-dev zlib1g-dev libcurl4-openssl-dev \
+            libglib2.0-dev libharfbuzz-dev \
+            libgl1-mesa-dev libglu1-mesa-dev libnss3-dev \
+            libcups2-dev libasound2-dev \
+            ucpp gettext zip unzip rsync
+
+      # ---- 4. 复制构建配置 ----
+      - name: 复制 autogen.input
+        run: |
+          cp build-minimal-lo/autogen.input $HOME/lo-src/autogen.input
+          # 可选：应用 mergelibs 补丁
+          if [ "${{ inputs.apply_patch }}" = "true" ]; then
+            echo "应用 mergelibs 裁剪补丁..."
+            cd $HOME/lo-src
+            patch -p1 < $GITHUB_WORKSPACE/build-minimal-lo/patch-mergelibs-minimal.diff || true
+          fi
+
+      # ---- 5. 配置 ----
+      - name: 运行 autogen.sh
+        run: |
+          cd $HOME/lo-src
+          ./autogen.sh
+
+      # ---- 6. 编译 ----
+      - name: 编译 LibreOffice LOKit
+        run: |
+          cd $HOME/lo-src
+          make -j$(nproc) build-nocheck 2>&1 | tee $HOME/build.log
+          echo "编译完成，退出码：$?"
+
+      # ---- 7. 打包输出文件 ----
+      - name: 打包 LOKit 库文件
+        run: |
+          OUTPUT=$HOME/lo-minimal-output
+          mkdir -p $OUTPUT
+
+          # 复制 program 目录（含所有 .so）
+          if [ -d $HOME/lo-src/instdir/program ]; then
+            cp -r $HOME/lo-src/instdir/program $OUTPUT/
+          fi
+
+          # 复制 LOKit 头文件
+          cp -r $HOME/lo-src/include/LibreOfficeKit $OUTPUT/ 2>/dev/null || true
+
+          # 编译 rtf2html 可执行文件
+          g++ -std=c++17 -O2 -o $OUTPUT/rtf2html \
+            $GITHUB_WORKSPACE/build-minimal-lo/rtf2html-lokit.cpp -ldl
+
+          echo "=== 输出文件大小 ==="
+          du -sh $OUTPUT/program/*.so 2>/dev/null | sort -h | tail -20
+          du -sh $OUTPUT
+
+          # 创建压缩包
+          cd $HOME
+          tar -czf lo-minimal-linux-x64.tar.gz -C $OUTPUT .
+          echo "压缩包大小：$(du -sh $HOME/lo-minimal-linux-x64.tar.gz)"
+
+      # ---- 8. 上传产物 ----
+      - name: 上传构建产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: lo-minimal-linux-x64
+          path: ~/lo-minimal-linux-x64.tar.gz
+          retention-days: 7
+
+      - name: 上传构建日志（失败时）
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log
+          path: ~/build.log
+          retention-days: 3
