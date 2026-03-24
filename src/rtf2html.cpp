@@ -572,7 +572,9 @@ private:
     void row_end()
     {
         cell_end();
-        if (in_row) { html += "</tr>\n"; in_row=false; row_cells.clear(); }
+        /* 不清 row_cells：RTF 中 \trowd(下一行) 往往出现在 \row(当前行结束) 之前，
+           row_cells 由 \trowd 负责重置 */
+        if (in_row) { html += "</tr>\n"; in_row=false; }
     }
     void table_end() { row_end(); if (in_table) { html += "</table>\n"; in_table=false; } }
 
@@ -698,7 +700,8 @@ private:
         if (w == "fi" && hp) { gs.pf.fi = p; return; }
 
         /* 段落结束 */
-        if (w == "par")  { flush_para(false); return; }
+        /* \par 在单元格内加 <br>，在普通段落外包 <p> */
+        if (w == "par")  { flush_para(true); return; }
         if (w == "line") {
             flush_ansi();
             if (span_open) { para_buf += close_tags(last_cf); span_open = false; }
