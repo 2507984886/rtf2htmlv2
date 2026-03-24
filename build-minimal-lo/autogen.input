@@ -1,0 +1,91 @@
+# 最小化 LOKit 构建配置 - 仅 Writer + RTF读取 + HTML导出
+# 基于 Collabora CPLinux-LOKit.conf，大幅裁剪非必要模块
+
+# ---- 基础设置 ----
+--enable-mpl-subset
+--enable-mergelibs
+--enable-release-build
+--enable-lto
+
+# ---- 禁用 GUI（纯 LOKit headless）----
+--disable-gui
+
+# ---- 禁用 Java / Python ----
+--without-java
+--without-junit
+--enable-python=no
+
+# ---- 禁用数据库连接 ----
+--disable-database-connectivity
+--disable-postgresql-sdbc
+--disable-firebird-sdbc
+
+# ---- 禁用脚本 ----
+--disable-scripting
+--disable-scripting-beanshell
+--disable-scripting-javascript
+
+# ---- 禁用 UI 扩展 ----
+--disable-odk
+--disable-extensions
+--disable-ext-wiki-publisher
+--disable-ext-nlpsolver
+--disable-report-builder
+
+# ---- 禁用 Linux 桌面集成 ----
+--disable-dbus
+--disable-gio
+--disable-dconf
+--disable-gstreamer-1-0
+--disable-evolution2
+--disable-kf5
+--disable-gtk3
+--disable-qt5
+--disable-randr
+--disable-avahi
+
+# ---- 禁用 Impress 远程 ----
+--disable-sdremote
+--disable-sdremote-bluetooth
+
+# ---- 禁用旧格式支持 ----
+--disable-lotuswordpro
+--disable-lpsolve
+
+# ---- 禁用联机更新 ----
+--disable-online-update
+
+# ---- 精简资源（不打包字体/词典/相册）----
+--without-fonts
+--without-help
+--without-myspell-dicts
+--with-galleries=no
+--with-theme=no
+--without-system-dicts
+
+# ---- 只保留简体/繁中+英文语言包（可按需调整）----
+--with-lang=en-US zh-CN zh-TW
+
+# ---- 使用内部构建的第三方库（保证跨发行版兼容）----
+--without-system-cairo
+--without-system-fontconfig
+--without-system-freetype
+--without-system-graphite
+--without-system-harfbuzz
+--without-system-openssl
+--without-system-libpng
+--without-system-libxml
+--without-system-jpeg
+--without-system-expat
+--without-system-curl
+--without-system-icu
+--without-system-nss
+--without-system-jars
+--without-system-postgresql
+--with-system-zlib
+
+# ---- 包格式（可选）----
+--without-package-format
+
+# ---- 调试符号（正式发布时可关闭以减小体积）----
+# --enable-symbols

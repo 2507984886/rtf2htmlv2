@@ -1,0 +1,73 @@
+--- a/solenv/gbuild/extensions/pre_MergedLibsList.mk
++++ b/solenv/gbuild/extensions/pre_MergedLibsList.mk
+@@ -20,8 +20,10 @@ gb_MERGE_LIBRARY_LIST := \
+ 	basegfx \
+ 	canvasfactory \
+ 	canvastools \
+-	chart2 \
+-	chart2api \
++	# chart2 chart2api 已移除 - RTF/HTML 转换不需要图表渲染
++	# 如果输入 RTF 含图表 OLE 对象，转换时会跳过图表内容
+ 	comphelper \
+ 	configmgr \
+ 	cppcanvas \
+@@ -37,17 +39,7 @@ gb_MERGE_LIBRARY_LIST := \
+ 	editeng \
+ 	embobj \
+ 	emboleobj \
+-	emfio \
+-	$(if $(filter WNT,$(OS)),emser) \
+-	evtatt \
+-	filterconfig \
+-	for \
+-	forui \
+-	fps_office \
+-	frm \
+-	fsstorage \
++	emfio \
++	filterconfig \
+ 	fwk \
+ 	$(if $(filter WNT,$(OS)),gdipluscanvas) \
+-	guesslang \
+ 	$(call gb_Helper_optional,DESKTOP,helplinker) \
+@@ -83,13 +75,6 @@ gb_MERGE_LIBRARY_LIST += \
+ 	$(if $(filter WNT,$(OS)), \
+ 		ado \
+ 	) \
+-	analysis \
+-	animcore \
+-	bib \
+-	cached1 \
+-	$(if $(ENABLE_CAIRO_CANVAS),cairocanvas) \
+-	cui \
+-	date \
+ 	$(call gb_Helper_optional,DBCONNECTIVITY, \
+ 		dbase \
+ 		dbaxml) \
+@@ -100,7 +85,6 @@ gb_MERGE_LIBRARY_LIST += \
+ 	dlgprov \
+ 	$(if $(ENABLE_EVOAB2),evoab) \
+ 	$(call gb_Helper_optional,DBCONNECTIVITY, \
+-		flat \
+ 		file) \
+ 	$(if $(ENABLE_FIREBIRD_SDBC),firebird_sdbc) \
+ 	graphicfilter \
+@@ -116,10 +100,7 @@ gb_MERGE_LIBRARY_LIST += \
+ 	pdffilter \
+ 	$(if $(BUILD_POSTGRESQL_SDBC),postgresql-sdbc) \
+-	pricing \
+ 	$(call gb_Helper_optional,SCRIPTING,protocolhandler) \
+-	rpt \
+-	rptui \
+ 	$(call gb_Helper_optional,SCRIPTING,scriptframe) \
+ 	sdbc2 \
+ 	$(call gb_Helper_optional,DBCONNECTIVITY,sdbt) \
+-	slideshow \
+ 	$(if $(filter WNT,$(OS)), \
+ 		smplmail \
+ 	) \
+-	solver \
+ 	storagefd \
+-	svgfilter \
+ 	t602filter \
+-	textconversiondlgs \
