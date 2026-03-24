@@ -1,0 +1,20 @@
+# 编译产物
+build/
+*.o
+*.obj
+
+# 根目录可执行文件（构建产物，不提交）
+/rtf2html.exe
+/rtf2html
+
+# 测试输出
+*.html
+*.gif
+
+# IDE
+.vs/
+.vscode/
+*.user
+
+# macOS
+.DS_Store
