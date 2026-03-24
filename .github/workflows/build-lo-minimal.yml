@@ -1,30 +1,32 @@
-name: 构建最小化 LOKit
+name: 构建最小化 LOKit（静态单文件）
 
 on:
-  workflow_dispatch:          # 手动触发
+  workflow_dispatch:
     inputs:
-      apply_patch:
-        description: '应用 mergelibs 裁剪补丁（减少约 20 MB）'
-        type: boolean
-        default: false
+      link_mode:
+        description: '链接方式'
+        type: choice
+        default: static
+        options:
+          - static      # 静态链接，无 DLL 依赖，预期 40-60 MB
+          - dynamic     # 动态链接，多个 .so 文件，预期 120-150 MB
 
 jobs:
   build:
     runs-on: ubuntu-22.04
-    timeout-minutes: 240      # 最长 4 小时
+    timeout-minutes: 300
 
     steps:
-      # ---- 1. 检出本仓库（含 autogen.input 和构建脚本）----
+      # ---- 1. 检出本仓库 ----
       - name: 检出 rtf2html 仓库
         uses: actions/checkout@v4
 
-      # ---- 2. 检出 LibreOffice 源码（浅克隆节省时间）----
-      - name: 检出 LibreOffice 源码
+      # ---- 2. 检出 LibreOffice 源码 ----
+      - name: 检出 LibreOffice 源码（浅克隆）
         run: |
           git clone --depth=1 \
             https://git.libreoffice.org/core \
             $HOME/lo-src
-          # 初始化必要的子模块
           cd $HOME/lo-src
           git submodule update --init --depth=1 \
             dictionaries translations
@@ -45,23 +47,26 @@ jobs:
             libgl1-mesa-dev libglu1-mesa-dev libnss3-dev \
             libcups2-dev libasound2-dev \
             ucpp gettext zip unzip rsync
-          # 安装 GCC 12 并设为默认（LibreOffice 26.8+ 需要 GCC >= 12）
+          # LibreOffice 26.8+ 需要 GCC >= 12
           sudo apt-get install -y gcc-12 g++-12
           sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-12 100
           sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-12 100
-          # 可选：验证版本
           gcc --version
 
-      # ---- 4. 复制构建配置 ----
-      - name: 复制 autogen.input
+      # ---- 4. 生成 autogen.input ----
+      - name: 生成构建配置
         run: |
           cp build-minimal-lo/autogen.input $HOME/lo-src/autogen.input
-          # 可选：应用 mergelibs 补丁
-          if [ "${{ inputs.apply_patch }}" = "true" ]; then
-            echo "应用 mergelibs 裁剪补丁..."
-            cd $HOME/lo-src
-            patch -p1 < $GITHUB_WORKSPACE/build-minimal-lo/patch-mergelibs-minimal.diff || true
+
+          # 静态模式：追加 --disable-dynamic-loading
+          if [ "${{ inputs.link_mode }}" = "static" ]; then
+            echo "" >> $HOME/lo-src/autogen.input
+            echo "# 静态链接 - 无运行时 DLL/SO 依赖" >> $HOME/lo-src/autogen.input
+            echo "--disable-dynamic-loading" >> $HOME/lo-src/autogen.input
           fi
+
+          echo "=== 最终 autogen.input ==="
+          cat $HOME/lo-src/autogen.input
 
       # ---- 5. 配置 ----
       - name: 运行 autogen.sh
@@ -70,40 +75,66 @@ jobs:
           ./autogen.sh
 
       # ---- 6. 编译 ----
-      - name: 编译 LibreOffice LOKit
+      - name: 编译 LibreOffice
         run: |
           cd $HOME/lo-src
           make -j$(nproc) build-nocheck 2>&1 | tee $HOME/build.log
-          echo "编译完成，退出码：$?"
+          echo "退出码：$?"
 
-      # ---- 7. 打包输出文件 ----
-      - name: 打包 LOKit 库文件
+      # ---- 7. 打包 ----
+      - name: 打包产物
         run: |
-          OUTPUT=$HOME/lo-minimal-output
+          OUTPUT=$HOME/lo-output
           mkdir -p $OUTPUT
-          # 复制 program 目录（含所有 .so）
-          if [ -d $HOME/lo-src/instdir/program ]; then
-            cp -r $HOME/lo-src/instdir/program $OUTPUT/
+          LO_INSTDIR=$HOME/lo-src/instdir
+
+          if [ "${{ inputs.link_mode }}" = "static" ]; then
+            # 静态模式：soffice 已内嵌所有代码，strip 去除调试符号
+            if [ -f "$LO_INSTDIR/program/soffice" ]; then
+              cp $LO_INSTDIR/program/soffice $OUTPUT/soffice
+              strip $OUTPUT/soffice
+              echo "soffice 大小：$(du -sh $OUTPUT/soffice)"
+            fi
+
+            # 复制必要的数据文件（ICU 数据、rdb 注册表等）
+            mkdir -p $OUTPUT/program
+            find $LO_INSTDIR/program -maxdepth 1 \
+              \( -name "*.res" -o -name "*.xcu" -o -name "*.rdb" \
+                 -o -name "icudt*" \) \
+              -exec cp {} $OUTPUT/program/ \; 2>/dev/null || true
+
+            # 编译 rtf2html 工具
+            g++ -std=c++17 -O2 -o $OUTPUT/rtf2html \
+              $GITHUB_WORKSPACE/build-minimal-lo/rtf2html-lokit.cpp -ldl
+            strip $OUTPUT/rtf2html
+
+          else
+            # 动态模式：复制所有 .so 并 strip
+            cp -r $LO_INSTDIR/program $OUTPUT/ 2>/dev/null || true
+            strip $OUTPUT/program/*.so 2>/dev/null || true
+
+            g++ -std=c++17 -O2 -o $OUTPUT/rtf2html \
+              $GITHUB_WORKSPACE/build-minimal-lo/rtf2html-lokit.cpp -ldl
           fi
+
           # 复制 LOKit 头文件
           cp -r $HOME/lo-src/include/LibreOfficeKit $OUTPUT/ 2>/dev/null || true
-          # 编译 rtf2html 可执行文件
-          g++ -std=c++17 -O2 -o $OUTPUT/rtf2html \
-            $GITHUB_WORKSPACE/build-minimal-lo/rtf2html-lokit.cpp -ldl
-          echo "=== 输出文件大小 ==="
-          du -sh $OUTPUT/program/*.so 2>/dev/null | sort -h | tail -20
-          du -sh $OUTPUT
-          # 创建压缩包
+
+          echo "=== 输出大小汇总 ==="
+          du -sh $OUTPUT/* | sort -h
+
+          # 打包
           cd $HOME
-          tar -czf lo-minimal-linux-x64.tar.gz -C $OUTPUT .
-          echo "压缩包大小：$(du -sh $HOME/lo-minimal-linux-x64.tar.gz)"
+          TARNAME="lo-minimal-linux-x64-${{ inputs.link_mode }}.tar.gz"
+          tar -czf $TARNAME -C $OUTPUT .
+          echo "最终压缩包：$(du -sh $HOME/$TARNAME)"
 
       # ---- 8. 上传产物 ----
-      - name: 上传构建产物
+      - name: 上传产物
         uses: actions/upload-artifact@v4
         with:
-          name: lo-minimal-linux-x64
-          path: ~/lo-minimal-linux-x64.tar.gz
+          name: lo-minimal-linux-x64-${{ inputs.link_mode }}
+          path: ~/lo-minimal-linux-x64-${{ inputs.link_mode }}.tar.gz
           retention-days: 7
 
       - name: 上传构建日志（失败时）

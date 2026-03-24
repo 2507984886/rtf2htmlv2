@@ -7,6 +7,11 @@
 --enable-release-build
 --enable-lto
 
+# ---- 静态链接（无 DLL/SO 依赖，单文件部署）----
+# 配合 LTO 死代码消除，预期产物约 40-60 MB
+--disable-dynamic-loading
+--with-static-lib=YES
+
 # ---- 禁用 GUI（纯 LOKit headless）----
 --disable-gui
 
