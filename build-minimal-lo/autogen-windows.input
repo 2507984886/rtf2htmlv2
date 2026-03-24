@@ -1,0 +1,80 @@
+# LibreOffice 最小化 LOKit 构建配置 - Windows (Cygwin + MSVC)
+# 放置于 LibreOffice 源码根目录，命名为 autogen.input
+
+# ---- 编译器：使用 VS2022 ----
+--with-visual-studio=2022
+
+# ---- 静态链接（无 DLL 依赖）----
+--disable-dynamic-loading
+
+# ---- 禁用 GUI（LOKit headless）----
+--disable-gui
+
+# ---- 基础优化 ----
+--enable-mpl-subset
+--enable-mergelibs
+--enable-release-build
+--enable-lto
+
+# ---- 禁用 Java ----
+--without-java
+--without-junit
+
+# ---- 禁用 Python ----
+--enable-python=no
+
+# ---- 禁用数据库 ----
+--disable-database-connectivity
+--disable-postgresql-sdbc
+--disable-firebird-sdbc
+
+# ---- 禁用脚本 ----
+--disable-scripting
+--disable-scripting-beanshell
+--disable-scripting-javascript
+
+# ---- 禁用扩展 ----
+--disable-odk
+--disable-extensions
+--disable-ext-wiki-publisher
+--disable-ext-nlpsolver
+--disable-report-builder
+
+# ---- 禁用旧格式 ----
+--disable-lotuswordpro
+--disable-lpsolve
+
+# ---- 禁用联机更新 ----
+--disable-online-update
+
+# ---- 精简资源 ----
+--without-fonts
+--without-help
+--without-myspell-dicts
+--with-galleries=no
+--with-theme=no
+--without-system-dicts
+
+# ---- 语言包（按需调整）----
+--with-lang=en-US zh-CN zh-TW
+
+# ---- 第三方库（全部内部构建，保证兼容）----
+--without-system-cairo
+--without-system-fontconfig
+--without-system-freetype
+--without-system-graphite
+--without-system-harfbuzz
+--without-system-openssl
+--without-system-libpng
+--without-system-libxml
+--without-system-jpeg
+--without-system-expat
+--without-system-curl
+--without-system-icu
+--without-system-nss
+--without-system-jars
+--without-system-postgresql
+--with-system-zlib
+
+# ---- 不打包安装包 ----
+--without-package-format
