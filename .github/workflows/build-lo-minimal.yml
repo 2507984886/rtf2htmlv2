@@ -29,7 +29,7 @@ jobs:
           git submodule update --init --depth=1 \
             dictionaries translations
 
-      # ---- 3. 安装构建依赖 ----
+      # ---- 3. 安装构建依赖（含 GCC 12）----
       - name: 安装构建依赖
         run: |
           sudo apt-get update -qq
@@ -45,6 +45,12 @@ jobs:
             libgl1-mesa-dev libglu1-mesa-dev libnss3-dev \
             libcups2-dev libasound2-dev \
             ucpp gettext zip unzip rsync
+          # 安装 GCC 12 并设为默认（LibreOffice 26.8+ 需要 GCC >= 12）
+          sudo apt-get install -y gcc-12 g++-12
+          sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-12 100
+          sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-12 100
+          # 可选：验证版本
+          gcc --version
 
       # ---- 4. 复制构建配置 ----
       - name: 复制 autogen.input
@@ -75,23 +81,18 @@ jobs:
         run: |
           OUTPUT=$HOME/lo-minimal-output
           mkdir -p $OUTPUT
-
           # 复制 program 目录（含所有 .so）
           if [ -d $HOME/lo-src/instdir/program ]; then
             cp -r $HOME/lo-src/instdir/program $OUTPUT/
           fi
-
           # 复制 LOKit 头文件
           cp -r $HOME/lo-src/include/LibreOfficeKit $OUTPUT/ 2>/dev/null || true
-
           # 编译 rtf2html 可执行文件
           g++ -std=c++17 -O2 -o $OUTPUT/rtf2html \
             $GITHUB_WORKSPACE/build-minimal-lo/rtf2html-lokit.cpp -ldl
-
           echo "=== 输出文件大小 ==="
           du -sh $OUTPUT/program/*.so 2>/dev/null | sort -h | tail -20
           du -sh $OUTPUT
-
           # 创建压缩包
           cd $HOME
           tar -czf lo-minimal-linux-x64.tar.gz -C $OUTPUT .
